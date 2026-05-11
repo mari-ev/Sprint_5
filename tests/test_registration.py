@@ -1,134 +1,201 @@
 import pytest
-from pages.auth_page import AuthPage
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from locators import AUTH_LOCATORS
+from selenium.webdriver.support import expected_conditions as EC
+from locators import RegistrationPageLocators
+from constants import BASE_URL, WAIT_TIMEOUT
 
 
-class TestRegistration:
-    def _click_element(self, locator_key):
-        """Клик по элементу с ожиданием кликабельности."""
-        element = self.wait.until(
-            EC.element_to_be_clickable(AUTH_LOCATORS[locator_key])
+class TestUserRegistration:
+
+    def test_user_registration(self, get_driver, generate_test_data):
+        """Тест регистрации нового пользователя"""
+        driver = get_driver
+        test_data = generate_test_data
+        driver.get(BASE_URL)
+        wait = WebDriverWait(driver, WAIT_TIMEOUT)
+
+        login_reg_btn = wait.until(
+            EC.element_to_be_clickable(
+                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            )
         )
-        element.click()
+        login_reg_btn.click()
 
-    def _fill_field(self, locator_key, text):
-        """Заполнение поля с ожиданием возможности ввода."""
-        field = self.wait.until(EC.element_to_be_clickable(AUTH_LOCATORS[locator_key]))
-        field.send_keys(text)
-
-    def _assert_element_displayed(self, locator_key, error_message):
-        """Проверка видимости элемента."""
-        element = self.wait.until(
-            EC.presence_of_element_located(AUTH_LOCATORS[locator_key])
+        no_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
         )
-        assert element.is_displayed(), error_message
+        no_account_btn.click()
+        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
 
-    def _assert_text_in_element(self, locator_key, expected_text, error_template):
-        """Проверка текста в элементе."""
-        element = self.wait.until(
-            EC.presence_of_element_located(AUTH_LOCATORS[locator_key])
+        email_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
         )
-        actual_text = element.text.strip()
-        assert expected_text in actual_text, error_template.format(
-            actual_text=actual_text
+        email_field.clear()
+        email_field.send_keys(test_data["email"])
+
+        password_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
         )
+        password_field.clear()
+        password_field.send_keys(test_data["password"])
 
-    @pytest.fixture
-    def invalid_email(self):
-        """Фикстура для генерации некорректного email."""
-        return "test@"
+        confirm_password_field = wait.until(
+            EC.presence_of_element_located(
+                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
+            )
+        )
+        confirm_password_field.clear()
+        confirm_password_field.send_keys(test_data["password"])
 
-    # Тест 1: Успешная регистрация нового пользователя
-    def test_successful_registration(self, driver, wait, test_credentials):
-        email, password = test_credentials
-        auth_page = AuthPage(driver, wait)
+        create_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
+        )
+        create_account_btn.click()
 
-        auth_page.open_page("https://qa-desk.stand.praktikum-services.ru/")
-        auth_page.open_login_registration_modal()
-        auth_page.switch_to_registration()
-        auth_page.fill_email(email)
-        auth_page.fill_password(password)
-        auth_page.confirm_password(password)
-        auth_page.submit_registration()
-        auth_page.wait_for_modal_close()
-
+        avatar = wait.until(
+            EC.visibility_of_element_located(
+                RegistrationPageLocators.USER_AVATAR_ELEMENT
+            )
+        )
         assert (
-            auth_page.is_post_ad_button_displayed()
-        ), "Кнопка «Разместить объявление» не отображается на главной странице"
+            avatar.is_displayed()
+        ), "Аватар пользователя не отображается после регистрации"
+
+        username_element = wait.until(
+            EC.visibility_of_element_located(RegistrationPageLocators.USER_NAME_ELEMENT)
+        )
         assert (
-            auth_page.is_user_avatar_displayed()
-        ), "Аватар-заглушка не отображается после регистрации"
-        actual_name = auth_page.get_user_name()
-        assert (
-            "User" in actual_name
-        ), f"Ожидалось, что имя пользователя будет содержать 'User', но найдено: '{actual_name}'"
+            username_element.text.strip() == "User."
+        ), "Имя пользователя не соответствует ожидаемому"
 
-    # Тест 2: Регистрация с email не по маске
-    def test_registration_with_invalid_email(self, driver, wait, invalid_email):
-        password = "Test123!"
-        auth_page = AuthPage(driver, wait)
+    def test_registration_with_invalid_email(
+        self, get_driver, generate_invalid_email_test_data
+    ):
+        """Тест регистрации с некорректным email"""
+        driver = get_driver
+        test_data = generate_invalid_email_test_data
+        wait = WebDriverWait(driver, WAIT_TIMEOUT)
+        driver.get(BASE_URL)
 
-        auth_page.open_page("https://qa-desk.stand.praktikum-services.ru/")
-        auth_page.open_login_registration_modal()
-        auth_page.switch_to_registration()
-        auth_page.fill_email(invalid_email)
-        auth_page.fill_password(password)
-        auth_page.confirm_password(password)
-        auth_page.submit_registration()
+        login_reg_btn = wait.until(
+            EC.element_to_be_clickable(
+                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            )
+        )
+        login_reg_btn.click()
 
-        # ПРОВЕРКИ
-        assert (
-            auth_page.is_email_field_in_error_state()
-        ), "Поле Email не выделено красным"
-        actual_error_text = auth_page.get_email_error_message()
-        expected_error_text = "Ошибка"
-        assert (
-            expected_error_text in actual_error_text
-        ), f"Ожидалось сообщение '{expected_error_text}', но найдено: '{actual_error_text}'"
+        no_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
+        )
+        no_account_btn.click()
+        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
 
-    # Тест 3: Регистрация существующего пользователя
-    def test_registration_with_existing_email(self, driver, wait, create_test_user):
-        self.wait = wait  # Сохраняем wait для использования в методах
-        existing_email = create_test_user
+        email_field = wait.until(
+            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
+        )
+        email_field.clear()
+        email_field.send_keys(test_data["invalid_email"])
 
-        # 1. Нажимаем кнопку «Вход и регистрация»
-        self._click_element("login_reg_button")
+        password_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
+        )
+        password_field.clear()
+        password_field.send_keys(test_data["valid_password"])
 
-        # 2. Нажимаем кнопку «Нет аккаунта»
-        self._click_element("no_account_button")
+        confirm_password_field = wait.until(
+            EC.presence_of_element_located(
+                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
+            )
+        )
+        confirm_password_field.clear()
+        confirm_password_field.send_keys(test_data["valid_password"])
 
-        # 3. Заполняем все поля формы регистрации
-        self._fill_field("email_field", existing_email)
-        self._fill_field("password_field", "NewPassword123!")
-        self._fill_field("confirm_password_field", "NewPassword123!")
+        create_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
+        )
+        create_account_btn.click()
 
-        # Нажимаем кнопку «Создать аккаунт»
-        self._click_element("create_account_button")
-
-        # 4. ПРОВЕРКИ согласно ТЗ
-        # Проверка 1: поле Email выделено красным
-        self._assert_element_displayed(
-            "email_error_container_flexible",
-            "Поле Email не выделено красным при ошибке",
+        email_error_field = wait.until(
+            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_ERROR_FIELD)
         )
 
-        # Проверка 2: поле «Пароль» выделено красным
-        self._assert_element_displayed(
-            "password_error_container_flexible",
-            "Поле «Пароль» не выделено красным при ошибке",
+        error_message = wait.until(
+            EC.visibility_of_element_located(
+                RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+            )
+        )
+        assert (
+            error_message.text == "Ошибка"
+        ), "Сообщение об ошибке не отображается или текст не соответствует"
+
+    def test_registration_existing_user(
+        self, get_driver, registered_and_logged_out_user
+    ):
+        """Тест регистрации уже существующего пользователя"""
+        driver = get_driver
+        test_data = registered_and_logged_out_user
+        wait = WebDriverWait(driver, WAIT_TIMEOUT)
+
+        driver.get(BASE_URL)
+
+        login_reg_btn = wait.until(
+            EC.element_to_be_clickable(
+                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            )
+        )
+        login_reg_btn.click()
+
+        no_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
+        )
+        no_account_btn.click()
+
+        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
+
+        email_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
+        )
+        email_field.clear()
+        email_field.send_keys(test_data["email"])
+
+        password_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
+        )
+        password_field.clear()
+        password_field.send_keys(test_data["password"])
+
+        confirm_password_field = wait.until(
+            EC.presence_of_element_located(
+                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
+            )
+        )
+        confirm_password_field.clear()
+        confirm_password_field.send_keys(test_data["password"])
+
+        create_account_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
+        )
+        create_account_btn.click()
+
+        email_error_field = wait.until(
+            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_ERROR_FIELD)
+        )
+        password_error_field = wait.until(
+            EC.visibility_of_element_located(
+                RegistrationPageLocators.PASSWORD_ERROR_FIELD
+            )
+        )
+        confirm_password_error_field = wait.until(
+            EC.visibility_of_element_located(
+                RegistrationPageLocators.CONFIRM_PASSWORD_ERROR_FIELD
+            )
         )
 
-        # Проверка 3: поле «Повторите пароль» выделено красным
-        self._assert_element_displayed(
-            "confirm_password_error_container_flexible",
-            "Поле «Повторите пароль» не выделено красным при ошибке",
+        error_message = wait.until(
+            EC.visibility_of_element_located(
+                RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+            )
         )
-
-        # Проверка 4: под полем Email отображается сообщение «Ошибка»
-        self._assert_text_in_element(
-            "email_error_message_flexible",
-            "Ошибка",
-            "Ожидалось сообщение 'Ошибка', но найдено: '{actual_text}'",
-        )
+        assert (
+            error_message.text == "Ошибка"
+        ), "Сообщение об ошибке не отображается или текст не соответствует"

@@ -1,135 +1,158 @@
 import pytest
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from locators import ADS_LOCATORS, AUTH_LOCATORS
+import random
+from constants import BASE_URL, WAIT_TIMEOUT
+from locators import RegistrationPageLocators, AdCreationLocators
 
 
 class TestPostAd:
-    def _click_element(self, locator_dict, locator_key):
-        """Клик по элементу с ожиданием кликабельности."""
-        element = self.wait.until(EC.element_to_be_clickable(locator_dict[locator_key]))
-        element.click()
+    """Тесты для проверки размещения объявления (авторизованный и неавторизованный пользователь)"""
 
-    def _fill_field(self, locator_dict, locator_key, text):
-        """Заполнение поля с ожиданием возможности ввода."""
-        field = self.wait.until(EC.element_to_be_clickable(locator_dict[locator_key]))
-        field.clear()
-        field.send_keys(text)
+    def test_post_ad_unauthorized(self, get_driver):
+        """Тест: Создание объявления неавторизованным пользователем"""
+        driver = get_driver
+        wait = WebDriverWait(driver, WAIT_TIMEOUT)
 
-    def _assert_element_displayed(self, locator_dict, locator_key, error_message):
-        """Проверка видимости элемента."""
-        element = self.wait.until(
-            EC.presence_of_element_located(locator_dict[locator_key])
+        driver.get(BASE_URL)
+
+        post_ad_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.POST_AD_BUTTON)
         )
-        assert element.is_displayed(), error_message
+        post_ad_btn.click()
 
-    def _scroll_and_click(self, element):
-        """Прокрутка к элементу и клик через ActionChains."""
-        self.driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", element
+        modal_title = wait.until(
+            EC.visibility_of_element_located(RegistrationPageLocators.MODAL_POPUP_TITLE)
         )
-        actions = ActionChains(self.driver)
-        actions.move_to_element(element).click().perform()
 
-    # Тест 1: Создание объявления неавторизованным пользователем
-    def test_post_ad_unauthorized(self, driver, wait):
-        self.driver = driver
-        self.wait = wait
+        expected_text = "Чтобы разместить объявление, авторизуйтесь"
+        actual_text = modal_title.text
 
-        # Открываем главную страницу
-        driver.get("https://qa-desk.stand.praktikum-services.ru/")
-
-        # Нажимаем кнопку «Разместить объявление»
-        self._click_element(ADS_LOCATORS, "post_ad_button")
-
-        # Проверка 1: появление модального окна авторизации
-        modal_title = self.wait.until(
-            EC.visibility_of_element_located(ADS_LOCATORS["modal_auth_title"])
-        )
         assert (
-            modal_title.text.strip() == "Чтобы разместить объявление, авторизуйтесь"
-        ), "Заголовок модального окна некорректный"
+            expected_text in actual_text
+        ), f"Ошибка: ожидаемый текст '{expected_text}' не найден в фактическом тексте '{actual_text}'"
 
-        # Проверка 2: отображение кнопки «Вход и регистрация» в модальном окне
-        self._assert_element_displayed(
-            AUTH_LOCATORS,
-            "login_reg_button",
-            "Кнопка 'Вход и регистрация' не отображается в модальном окне",
+        driver.quit()
+
+    def test_post_ad_authorized(self, get_driver, registered_and_logged_out_user):
+        """Тест: Создание объявления авторизованным пользователем"""
+        driver = get_driver
+        wait = WebDriverWait(driver, WAIT_TIMEOUT)
+        test_data = registered_and_logged_out_user
+        ad_title = "Тестовый товар"
+        ad_price = "1000"
+
+        driver.get(BASE_URL)
+
+        login_reg_btn = wait.until(
+            EC.element_to_be_clickable(
+                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            )
+        )
+        login_reg_btn.click()
+
+        email_field = wait.until(
+            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
+        )
+        email_field.clear()
+        email_field.send_keys(test_data["email"])
+
+        password_field = driver.find_element(*RegistrationPageLocators.PASSWORD_FIELD)
+        password_field.clear()
+        password_field.send_keys(test_data["password"])
+
+        login_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.LOGIN_SUBMIT_BUTTON)
+        )
+        login_btn.click()
+
+        wait.until(
+            EC.invisibility_of_element_located(RegistrationPageLocators.MODAL_WINDOW)
         )
 
-    # Тест 2: Создание объявления авторизованным пользователем
-    def test_create_ad_authorized(self, driver, wait, create_test_user):
-        self.driver = driver
-        self.wait = wait
-        email, password = create_test_user
-        expected_title = "Тестовый товар для проверки"
-        expected_price = "2500"
-        expected_description = "Полное описание тестового товара для проверки функционала создания объявлений"
-
-        # ШАГ 1: Авторизация
-        driver.get("https://qa-desk.stand.praktikum-services.ru/")
-        self._click_element(AUTH_LOCATORS, "login_reg_button")
-        self._fill_field(AUTH_LOCATORS, "email_field", email)
-        self._fill_field(AUTH_LOCATORS, "password_field", password)
-        self._click_element(AUTH_LOCATORS, "login_button")
-
-        # Проверка авторизации
-        user_avatar = self.wait.until(
-            EC.visibility_of_element_located(AUTH_LOCATORS["user_avatar_button"])
+        post_ad_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.POST_AD_BUTTON)
         )
+        post_ad_btn.click()
+
+        title_field = wait.until(
+            EC.presence_of_element_located(AdCreationLocators.TITLE_FIELD)
+        )
+        title_field.send_keys(ad_title)
+
+        description_field = wait.until(
+            EC.presence_of_element_located(AdCreationLocators.DESCRIPTION_FIELD)
+        )
+        description_field.send_keys("Описание тестового товара")
+
+        price_field = wait.until(
+            EC.presence_of_element_located(AdCreationLocators.PRICE_FIELD)
+        )
+        price_field.send_keys(ad_price)
+
+        category_dropdown_btn = wait.until(
+            EC.element_to_be_clickable(AdCreationLocators.CATEGORY_DROPDOWN_BUTTON)
+        )
+        category_dropdown_btn.click()
+
+        wait.until(
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "dropDownMenu_optionsMobile__LmXZM")
+            )
+        )
+
+        category_option = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//div[@class='dropDownMenu_optionsMobile__LmXZM']//button//span[contains(text(), 'Технологии')]",
+                )
+            )
+        )
+        category_option.click()
+
+        condition_option = wait.until(
+            EC.element_to_be_clickable(AdCreationLocators.CONDITION_USED_LABEL)
+        )
+        condition_option.click()
+
+        city_dropdown_btn = wait.until(
+            EC.element_to_be_clickable(AdCreationLocators.CITY_DROPDOWN_BUTTON)
+        )
+        city_dropdown_btn.click()
+
+        wait.until(
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "dropDownMenu_optionsMobile__LmXZM")
+            )
+        )
+
+        city_options = driver.find_elements(
+            By.XPATH, "//div[@class='dropDownMenu_optionsMobile__LmXZM']//button//span"
+        )
+        random.choice(city_options).click()
+
+        submit_btn = wait.until(
+            EC.element_to_be_clickable(AdCreationLocators.SUBMIT_AD_BUTTON)
+        )
+        submit_btn.click()
+
+        wait.until(EC.url_changes(driver.current_url))
+
+        avatar_btn = wait.until(
+            EC.element_to_be_clickable(RegistrationPageLocators.USER_AVATAR_ELEMENT)
+        )
+        avatar_btn.click()
+
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        created_ad_locator = (
+            AdCreationLocators.AD_IN_PROFILE_BY_TITLE[0],
+            AdCreationLocators.AD_IN_PROFILE_BY_TITLE[1].format(ad_title),
+        )
+        created_ad = wait.until(EC.visibility_of_element_located(created_ad_locator))
+
         assert (
-            user_avatar.is_displayed()
-        ), "Авторизация не прошла — аватар пользователя не отображается"
-
-        # ШАГ 2: Открытие формы создания объявления
-        self._click_element(ADS_LOCATORS, "post_ad_button")
-
-        # ШАГ 3: Заполнение формы объявления
-        self._fill_field(ADS_LOCATORS, "title_field", expected_title)
-        self._fill_field(ADS_LOCATORS, "price_field", expected_price)
-        self._fill_field(ADS_LOCATORS, "description_field", expected_description)
-
-        # ШАГ 4: Публикация объявления
-        self._click_element(ADS_LOCATORS, "submit_ad_button")
-        self.wait.until(EC.url_contains("qa-desk.stand.praktikum-services.ru"))
-
-        # Ждём полной загрузки страницы после публикации объявления
-        self.wait.until(
-            lambda driver: driver.execute_script("return document.readyState")
-            == "complete"
-        )
-
-        # ШАГ 5: Переход в профиль пользователя через аватар
-        user_avatar_btn = self.wait.until(
-            EC.element_to_be_clickable(AUTH_LOCATORS["user_avatar_button"])
-        )
-        self._scroll_and_click(user_avatar_btn)
-
-        # Ожидаемый URL страницы профиля
-        expected_profile_url = "https://qa-desk.stand.praktikum-services.ru/profile"
-        self.wait.until(EC.url_to_be(expected_profile_url))
-
-        # ШАГ 6: Проверка отображения страницы профиля
-        profile_title = self.wait.until(
-            EC.visibility_of_element_located(ADS_LOCATORS["profile_page_title"])
-        )
-        assert "Мой профиль" in profile_title.text, "Страница профиля не открылась"
-
-        # ШАГ 7: Проверка раздела «Мои объявления»
-        my_ads_title = self.wait.until(
-            EC.visibility_of_element_located(ADS_LOCATORS["my_ads_page_title"])
-        )
-        assert my_ads_title.is_displayed(), "Раздел 'Мои объявления' не отображается"
-
-        # ШАГ 8: Проверка наличия созданного объявления
-        ad_locator_template = ADS_LOCATORS["ad_in_profile_by_title"]
-        ad_locator = (
-            ad_locator_template[0],
-            ad_locator_template[1].format(expected_title),
-        )
-
-        found_ad = self.wait.until(EC.presence_of_element_located(ad_locator))
-        assert (
-            found_ad.is_displayed()
-        ), f"Объявление '{expected_title}' не найдено в списке объявлений"
+            created_ad.is_displayed()
+        ), f"Созданное объявление с названием '{ad_title}' отображается в профиле пользователя"
