@@ -1,201 +1,160 @@
 import pytest
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from locators import RegistrationPageLocators
 from constants import BASE_URL, WAIT_TIMEOUT
+from locators import RegistrationPageLocators
+from data_generation import (
+    generate_invalid_email_test_data,
+)
+from helpers import (
+    register_user,
+    get_auth_status,
+    ElementHelper,
+)
+from data import ErrorMessages, UITexts
 
 
 class TestUserRegistration:
-
-    def test_user_registration(self, get_driver, generate_test_data):
+    def test_user_registration(self, get_driver, test_data):
         """Тест регистрации нового пользователя"""
         driver = get_driver
-        test_data = generate_test_data
-        driver.get(BASE_URL)
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
-        )
-        login_reg_btn.click()
+        register_user(driver, wait, test_data)
 
-        no_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
-        )
-        no_account_btn.click()
-        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
+        # Проверка перехода на главную (игнорируем хеш-фрагмент)
+        assert driver.current_url.startswith(
+            BASE_URL
+        ), "Не произошёл переход на главную страницу после регистрации"
 
-        email_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
-        )
-        email_field.clear()
-        email_field.send_keys(test_data["email"])
-
-        password_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
-        )
-        password_field.clear()
-        password_field.send_keys(test_data["password"])
-
-        confirm_password_field = wait.until(
-            EC.presence_of_element_located(
-                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
-            )
-        )
-        confirm_password_field.clear()
-        confirm_password_field.send_keys(test_data["password"])
-
-        create_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
-        )
-        create_account_btn.click()
-
-        avatar = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.USER_AVATAR_ELEMENT
-            )
-        )
+        # Проверяем статус авторизации через хелпер
+        auth_status = get_auth_status(driver, wait)
+        assert auth_status[
+            "avatar_visible"
+        ], "Аватар пользователя не отображается после регистрации"
         assert (
-            avatar.is_displayed()
-        ), "Аватар пользователя не отображается после регистрации"
+            auth_status["user_name"] == UITexts.EXPECTED_USER_NAME
+        ), f"Имя пользователя не соответствует ожидаемому. Ожидалось: {UITexts.EXPECTED_USER_NAME}"
 
-        username_element = wait.until(
-            EC.visibility_of_element_located(RegistrationPageLocators.USER_NAME_ELEMENT)
-        )
-        assert (
-            username_element.text.strip() == "User."
-        ), "Имя пользователя не соответствует ожидаемому"
-
-    def test_registration_with_invalid_email(
-        self, get_driver, generate_invalid_email_test_data
-    ):
+    def test_registration_with_invalid_email(self, get_driver):
         """Тест регистрации с некорректным email"""
         driver = get_driver
-        test_data = generate_invalid_email_test_data
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
+        test_data = generate_invalid_email_test_data()
+
         driver.get(BASE_URL)
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
+        # Используем хелперы для выполнения действий
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
         )
-        login_reg_btn.click()
-
-        no_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
-        )
-        no_account_btn.click()
-        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
-
-        email_field = wait.until(
-            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
-        )
-        email_field.clear()
-        email_field.send_keys(test_data["invalid_email"])
-
-        password_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
-        )
-        password_field.clear()
-        password_field.send_keys(test_data["valid_password"])
-
-        confirm_password_field = wait.until(
-            EC.presence_of_element_located(
-                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
-            )
-        )
-        confirm_password_field.clear()
-        confirm_password_field.send_keys(test_data["valid_password"])
-
-        create_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
-        )
-        create_account_btn.click()
-
-        email_error_field = wait.until(
-            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_ERROR_FIELD)
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.NO_ACCOUNT_BUTTON
         )
 
-        error_message = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
-            )
+        ElementHelper.wait_and_input(
+            driver,
+            wait,
+            RegistrationPageLocators.EMAIL_FIELD,
+            test_data["email"],
         )
+        ElementHelper.wait_and_input(
+            driver,
+            wait,
+            RegistrationPageLocators.PASSWORD_FIELD,
+            test_data["password"],
+        )
+        ElementHelper.wait_and_input(
+            driver,
+            wait,
+            RegistrationPageLocators.CONFIRM_PASSWORD_FIELD,
+            test_data["password"],
+        )
+
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
+        )
+
+        # Проверка всех трёх контейнеров
+        error_containers = [
+            (RegistrationPageLocators.EMAIL_FIELD_ERROR_PARENT, "Email поле"),
+            (RegistrationPageLocators.PASSWORD_FIELD_ERROR_PARENT, "Пароль поле"),
+            (
+                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD_ERROR_PARENT,
+                "Подтверждение пароля поле",
+            ),
+        ]
+
+        for locator, field_name in error_containers:
+            container = ElementHelper.wait_for_visibility(driver, wait, locator)
+            assert (
+                container.is_displayed()
+            ), f"{field_name} не обведено красным при ошибке валидации"
+
+        # Проверка сообщения об ошибке
+        error_message = ElementHelper.wait_for_visibility(
+            driver, wait, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+        )
+        actual_error_text = error_message.text
+        expected_error_text = ErrorMessages.EXPECTED_ERROR_MESSAGE
         assert (
-            error_message.text == "Ошибка"
-        ), "Сообщение об ошибке не отображается или текст не соответствует"
+            actual_error_text == expected_error_text
+        ), f"Сообщение об ошибке не соответствует. Ожидалось: {expected_error_text}"
 
-    def test_registration_existing_user(
-        self, get_driver, registered_and_logged_out_user
-    ):
+    def test_registration_existing_user(self, get_driver, logged_out_user):
         """Тест регистрации уже существующего пользователя"""
         driver = get_driver
-        test_data = registered_and_logged_out_user
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
+        test_data = logged_out_user
 
         driver.get(BASE_URL)
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
+        # Используем хелперы для выполнения действий
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
         )
-        login_reg_btn.click()
-
-        no_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.NO_ACCOUNT_BUTTON)
-        )
-        no_account_btn.click()
-
-        wait.until(EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD))
-
-        email_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
-        )
-        email_field.clear()
-        email_field.send_keys(test_data["email"])
-
-        password_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.PASSWORD_FIELD)
-        )
-        password_field.clear()
-        password_field.send_keys(test_data["password"])
-
-        confirm_password_field = wait.until(
-            EC.presence_of_element_located(
-                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD
-            )
-        )
-        confirm_password_field.clear()
-        confirm_password_field.send_keys(test_data["password"])
-
-        create_account_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.CREATE_ACCOUNT_BUTTON)
-        )
-        create_account_btn.click()
-
-        email_error_field = wait.until(
-            EC.visibility_of_element_located(RegistrationPageLocators.EMAIL_ERROR_FIELD)
-        )
-        password_error_field = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.PASSWORD_ERROR_FIELD
-            )
-        )
-        confirm_password_error_field = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.CONFIRM_PASSWORD_ERROR_FIELD
-            )
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.NO_ACCOUNT_BUTTON
         )
 
-        error_message = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
-            )
+        ElementHelper.wait_and_input(
+            driver, wait, RegistrationPageLocators.EMAIL_FIELD, test_data["email"]
         )
+        ElementHelper.wait_and_input(
+            driver, wait, RegistrationPageLocators.PASSWORD_FIELD, test_data["password"]
+        )
+        ElementHelper.wait_and_input(
+            driver,
+            wait,
+            RegistrationPageLocators.CONFIRM_PASSWORD_FIELD,
+            test_data["password"],
+        )
+
+        ElementHelper.wait_and_click(
+            driver, wait, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
+        )
+
+        # Проверка всех трёх контейнеров
+        error_containers = [
+            (RegistrationPageLocators.EMAIL_FIELD_ERROR_PARENT, "Email поле"),
+            (RegistrationPageLocators.PASSWORD_FIELD_ERROR_PARENT, "Пароль поле"),
+            (
+                RegistrationPageLocators.CONFIRM_PASSWORD_FIELD_ERROR_PARENT,
+                "Подтверждение пароля поле",
+            ),
+        ]
+
+        for locator, field_name in error_containers:
+            container = ElementHelper.wait_for_visibility(driver, wait, locator)
+            assert (
+                container.is_displayed()
+            ), f"{field_name} не обведено красным при ошибке валидации"
+
+        # Проверка сообщения об ошибке
+        error_message = ElementHelper.wait_for_visibility(
+            driver, wait, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+        )
+        actual_error_text = error_message.text
+        expected_error_text = ErrorMessages.EXPECTED_ERROR_MESSAGE
         assert (
-            error_message.text == "Ошибка"
-        ), "Сообщение об ошибке не отображается или текст не соответствует"
+            actual_error_text == expected_error_text
+        ), f"Сообщение об ошибке не соответствует. Ожидалось: {expected_error_text}"

@@ -1,124 +1,73 @@
 import pytest
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from constants import BASE_URL, WAIT_TIMEOUT
+from data import ErrorMessages, UITexts
+from helpers import (
+    login_user,
+    logout_user,
+    is_login_button_visible,
+    get_auth_status,
+    ElementHelper,
+)
 from locators import RegistrationPageLocators
 
 
 class TestUserLoginLogout:
     """Тесты для проверки авторизации и выхода пользователя"""
 
-    def test_user_login(self, get_driver, registered_and_logged_out_user):
+    def test_user_login(self, get_driver, logged_out_user):
+        """Тест авторизации пользователя: переход на главную, аватар и имя User отображаются"""
         driver = get_driver
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
-        test_data = registered_and_logged_out_user
+        test_data = logged_out_user
 
         driver.get(BASE_URL)
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
-        )
-        login_reg_btn.click()
+        # Используем хелпер для авторизации
+        login_user(driver, wait, test_data)
 
-        email_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
-        )
-        email_field.clear()
-        email_field.send_keys(test_data["email"])
+        # Проверка перехода на главную
+        assert driver.current_url.startswith(
+            BASE_URL
+        ), "Не произошёл переход на главную страницу после авторизации"
 
-        password_field = driver.find_element(*RegistrationPageLocators.PASSWORD_FIELD)
-        password_field.clear()
-        password_field.send_keys(test_data["password"])
-
-        login_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.LOGIN_SUBMIT_BUTTON)
-        )
-        login_btn.click()
-
-        wait.until(
-            EC.invisibility_of_element_located(RegistrationPageLocators.MODAL_WINDOW)
-        )
-
-        avatar = wait.until(
-            EC.visibility_of_element_located(
-                RegistrationPageLocators.USER_AVATAR_ELEMENT
-            )
-        )
+        # Проверяем статус авторизации через хелпер
+        auth_status = get_auth_status(driver, wait)
+        assert auth_status[
+            "avatar_visible"
+        ], ErrorMessages.ELEMENT_USER_AVATAR_NOT_VISIBLE
         assert (
-            avatar.is_displayed()
-        ), "Аватар пользователя не отображается после авторизации"
+            auth_status["user_name"] == UITexts.EXPECTED_USER_NAME
+        ), ErrorMessages.USER_NAME_DOES_NOT_MATCH
 
-        user_name = wait.until(
-            EC.visibility_of_element_located(RegistrationPageLocators.USER_NAME_ELEMENT)
-        )
-        assert (
-            user_name.is_displayed()
-        ), "Имя пользователя не отображается после авторизации"
-        assert (
-            "User" in user_name.text
-        ), f"Ожидалось имя 'User', но найдено: {user_name.text}"
-
-    def test_user_logout(self, get_driver, registered_and_logged_out_user):
+    def test_user_logout(self, get_driver, logged_out_user):
+        """Тест выхода пользователя: аватар и имя исчезают, появляется кнопка 'Вход и регистрация'"""
         driver = get_driver
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
-        test_data = registered_and_logged_out_user
+        test_data = logged_out_user
 
         driver.get(BASE_URL)
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
-        )
-        login_reg_btn.click()
+        # Авторизуемся через хелпер
+        login_user(driver, wait, test_data)
 
-        email_field = wait.until(
-            EC.presence_of_element_located(RegistrationPageLocators.EMAIL_FIELD)
-        )
-        email_field.clear()
-        email_field.send_keys(test_data["email"])
+        # Выходим из аккаунта через хелпер
+        logout_user(driver, wait)
 
-        password_field = driver.find_element(*RegistrationPageLocators.PASSWORD_FIELD)
-        password_field.clear()
-        password_field.send_keys(test_data["password"])
+        # ПРОВЕРКИ ПОСЛЕ ВЫХОДА
 
-        login_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.LOGIN_SUBMIT_BUTTON)
-        )
-        login_btn.click()
-
-        wait.until(
-            EC.invisibility_of_element_located(RegistrationPageLocators.MODAL_WINDOW)
+        # 1. Проверяем, что аватар исчез (используем готовый хелпер)
+        ElementHelper.verify_element_not_present(
+            driver, wait, RegistrationPageLocators.USER_AVATAR_ELEMENT
         )
 
-        logout_btn = wait.until(
-            EC.element_to_be_clickable(RegistrationPageLocators.LOGOUT_BUTTON)
+        # 2. Проверяем, что имя пользователя исчезло
+        ElementHelper.verify_element_not_present(
+            driver, wait, RegistrationPageLocators.USER_NAME_ELEMENT
         )
-        logout_btn.click()
 
-        login_reg_btn = wait.until(
-            EC.element_to_be_clickable(
-                RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
-            )
-        )
+        # 3. Проверяем появление кнопки 'Вход и регистрация'
+        login_btn_visible = is_login_button_visible(driver, wait)
         assert (
-            login_reg_btn.is_displayed()
-        ), "Кнопка 'Вход и регистрация' отображается после выхода"
-
-        avatar_invisible = wait.until(
-            EC.invisibility_of_element_located(
-                RegistrationPageLocators.USER_AVATAR_ELEMENT
-            ),
-            message="Аватар должен быть невидимым после выхода",
-        )
-        assert avatar_invisible, "Аватар пользователя всё не отображается после выхода"
-
-        name_invisible = wait.until(
-            EC.invisibility_of_element_located(
-                RegistrationPageLocators.USER_NAME_ELEMENT
-            ),
-            message="Имя пользователя должно быть невидимым после выхода",
-        )
-        assert name_invisible, "Имя пользователя всё ещё отображается после выхода"
+            login_btn_visible
+        ), f"Кнопка '{UITexts.LOGIN_REGISTRATION_BUTTON_TEXT}' не отображается после выхода"
