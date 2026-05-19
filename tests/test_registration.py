@@ -1,10 +1,6 @@
-import pytest
-from selenium.webdriver.support.ui import WebDriverWait
-from constants import BASE_URL, WAIT_TIMEOUT
+from constants import BASE_URL
 from locators import RegistrationPageLocators
-from data_generation import (
-    generate_invalid_email_test_data,
-)
+from data_generation import generate_invalid_email_test_data, generate_test_data
 from helpers import (
     register_user,
     get_auth_status,
@@ -14,12 +10,11 @@ from data import ErrorMessages, UITexts
 
 
 class TestUserRegistration:
-    def test_user_registration(self, get_driver, test_data):
+    def test_user_registration(self, get_driver):
         """Тест регистрации нового пользователя"""
         driver = get_driver
-        wait = WebDriverWait(driver, WAIT_TIMEOUT)
-
-        register_user(driver, wait, test_data)
+        test_data = generate_test_data()
+        register_user(driver, test_data)
 
         # Проверка перехода на главную (игнорируем хеш-фрагмент)
         assert driver.current_url.startswith(
@@ -27,7 +22,7 @@ class TestUserRegistration:
         ), "Не произошёл переход на главную страницу после регистрации"
 
         # Проверяем статус авторизации через хелпер
-        auth_status = get_auth_status(driver, wait)
+        auth_status = get_auth_status(driver)
         assert auth_status[
             "avatar_visible"
         ], "Аватар пользователя не отображается после регистрации"
@@ -38,40 +33,34 @@ class TestUserRegistration:
     def test_registration_with_invalid_email(self, get_driver):
         """Тест регистрации с некорректным email"""
         driver = get_driver
-        wait = WebDriverWait(driver, WAIT_TIMEOUT)
         test_data = generate_invalid_email_test_data()
 
         driver.get(BASE_URL)
 
         # Используем хелперы для выполнения действий
         ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            driver, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
         )
-        ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.NO_ACCOUNT_BUTTON
-        )
+        ElementHelper.wait_and_click(driver, RegistrationPageLocators.NO_ACCOUNT_BUTTON)
 
         ElementHelper.wait_and_input(
             driver,
-            wait,
             RegistrationPageLocators.EMAIL_FIELD,
             test_data["email"],
         )
         ElementHelper.wait_and_input(
             driver,
-            wait,
             RegistrationPageLocators.PASSWORD_FIELD,
             test_data["password"],
         )
         ElementHelper.wait_and_input(
             driver,
-            wait,
             RegistrationPageLocators.CONFIRM_PASSWORD_FIELD,
             test_data["password"],
         )
 
         ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
+            driver, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
         )
 
         # Проверка всех трёх контейнеров
@@ -85,14 +74,14 @@ class TestUserRegistration:
         ]
 
         for locator, field_name in error_containers:
-            container = ElementHelper.wait_for_visibility(driver, wait, locator)
+            container = ElementHelper.wait_for_visibility(driver, locator)
             assert (
                 container.is_displayed()
             ), f"{field_name} не обведено красным при ошибке валидации"
 
         # Проверка сообщения об ошибке
         error_message = ElementHelper.wait_for_visibility(
-            driver, wait, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+            driver, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
         )
         actual_error_text = error_message.text
         expected_error_text = ErrorMessages.EXPECTED_ERROR_MESSAGE
@@ -103,34 +92,30 @@ class TestUserRegistration:
     def test_registration_existing_user(self, get_driver, logged_out_user):
         """Тест регистрации уже существующего пользователя"""
         driver = get_driver
-        wait = WebDriverWait(driver, WAIT_TIMEOUT)
         test_data = logged_out_user
 
         driver.get(BASE_URL)
 
         # Используем хелперы для выполнения действий
         ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
+            driver, RegistrationPageLocators.LOGIN_REGISTRATION_BUTTON
         )
-        ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.NO_ACCOUNT_BUTTON
-        )
+        ElementHelper.wait_and_click(driver, RegistrationPageLocators.NO_ACCOUNT_BUTTON)
 
         ElementHelper.wait_and_input(
-            driver, wait, RegistrationPageLocators.EMAIL_FIELD, test_data["email"]
+            driver, RegistrationPageLocators.EMAIL_FIELD, test_data["email"]
         )
         ElementHelper.wait_and_input(
-            driver, wait, RegistrationPageLocators.PASSWORD_FIELD, test_data["password"]
+            driver, RegistrationPageLocators.PASSWORD_FIELD, test_data["password"]
         )
         ElementHelper.wait_and_input(
             driver,
-            wait,
             RegistrationPageLocators.CONFIRM_PASSWORD_FIELD,
             test_data["password"],
         )
 
         ElementHelper.wait_and_click(
-            driver, wait, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
+            driver, RegistrationPageLocators.CREATE_ACCOUNT_BUTTON
         )
 
         # Проверка всех трёх контейнеров
@@ -144,14 +129,14 @@ class TestUserRegistration:
         ]
 
         for locator, field_name in error_containers:
-            container = ElementHelper.wait_for_visibility(driver, wait, locator)
+            container = ElementHelper.wait_for_visibility(driver, locator)
             assert (
                 container.is_displayed()
             ), f"{field_name} не обведено красным при ошибке валидации"
 
         # Проверка сообщения об ошибке
         error_message = ElementHelper.wait_for_visibility(
-            driver, wait, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
+            driver, RegistrationPageLocators.ERROR_MESSAGE_UNDER_EMAIL
         )
         actual_error_text = error_message.text
         expected_error_text = ErrorMessages.EXPECTED_ERROR_MESSAGE
